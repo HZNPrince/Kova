@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-pinocchio = "0.10.2"
+pinocchio = { version = "0.10.2", features = ["cpi"] }
 [lib]
 crate-type = ["cdylib", "lib"]

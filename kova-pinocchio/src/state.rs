@@ -25,7 +25,7 @@ pub struct LaunchAccount {
     pub dev_lock_end_time: i64,
 
     // Dynamic Curve Parameters
-    pub base_k: u64,
+    pub base_k: u64, // base curve multiplier (100_00)
     pub current_velocity: u64,
     pub last_trade_timestamp: i64,
 }

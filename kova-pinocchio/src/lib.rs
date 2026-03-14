@@ -2,6 +2,7 @@
 
 use pinocchio::{ProgramResult, account::AccountView, address::Address, entrypoint};
 
+mod curve;
 mod instructions;
 mod state;
 
@@ -24,7 +25,7 @@ pub fn process_instruction(
 
     match instruction_id {
         0 => instructions::initialize::process_initialize(_program_id, _accounts, args),
-        1 => Ok(()),
+        1 => instructions::trade::process_trade(_program_id, _accounts, args),
         _ => Err(pinocchio::error::ProgramError::InvalidInstructionData),
     }
 }
