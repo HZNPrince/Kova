@@ -1,7 +1,4 @@
-#![no_std]
-
 use pinocchio::{ProgramResult, account::AccountView, address::Address, entrypoint};
-
 mod curve;
 mod instructions;
 mod state;

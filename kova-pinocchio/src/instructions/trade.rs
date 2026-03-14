@@ -1,4 +1,13 @@
-use pinocchio::{ProgramResult, account::AccountView, address::Address, error::ProgramError};
+use pinocchio::{
+    ProgramResult,
+    account::AccountView,
+    address::Address,
+    cpi::Signer,
+    error::ProgramError,
+    sysvars::{Sysvar, clock::Clock},
+};
+use pinocchio_system::instructions::Transfer;
+use pinocchio_token::instructions::{Burn, MintTo};
 
 use crate::curve;
 use crate::state::LaunchAccount;
@@ -11,6 +20,15 @@ pub fn process_trade(program_id: &Address, accounts: &[AccountView], args: &[u8]
         .next()
         .ok_or(ProgramError::NotEnoughAccountKeys)?;
     let launch_account_info = accounts_iter
+        .next()
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+    let vault_account = accounts_iter
+        .next()
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+    let user_ata = accounts_iter
+        .next()
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+    let mint = accounts_iter
         .next()
         .ok_or(ProgramError::NotEnoughAccountKeys)?;
 
@@ -46,7 +64,7 @@ pub fn process_trade(program_id: &Address, accounts: &[AccountView], args: &[u8]
     }
 
     // Fetch time
-    let current_timestamp = launch_state.last_trade_timestamp + 10;
+    let current_timestamp = Clock::get()?.unix_timestamp;
 
     // Calculation
     if is_buy {
@@ -67,7 +85,31 @@ pub fn process_trade(program_id: &Address, accounts: &[AccountView], args: &[u8]
         )?;
 
         // CPI to transfer user sols to vault
+        Transfer {
+            from: user,
+            to: vault_account,
+            lamports: cost_lamports,
+        }
+        .invoke()?;
+
         // CPI to mint 'token_amounts' Tokens to User
+        let mint_address = mint.address().as_ref();
+        let bump_state = [launch_state.state_bump];
+        let signer_seeds_state = [
+            // launch state is the pda
+            pinocchio::cpi::Seed::from(b"state"),
+            pinocchio::cpi::Seed::from(mint_address),
+            pinocchio::cpi::Seed::from(&bump_state),
+        ];
+        let pda_signer = Signer::from(&signer_seeds_state);
+
+        MintTo {
+            mint,
+            account: user_ata,
+            mint_authority: launch_account_info,
+            amount: token_amount,
+        }
+        .invoke_signed(&[pda_signer])?;
 
         // Update State
         launch_state.supply_tokens = launch_state
@@ -87,8 +129,30 @@ pub fn process_trade(program_id: &Address, accounts: &[AccountView], args: &[u8]
             100,
         )?;
 
-        // CPI to transfer vault to user
-        // CPI to burn 'token_amounts' Tokens from User
+        // MANUALLY transfer lamports from Vault back to User
+        // Because Kova owns the Vault and it has 0 data, we can directly modify pointers.
+        let vault_lamports = vault_account.lamports();
+        let user_lamports = user.lamports();
+
+        vault_account.set_lamports(
+            vault_lamports
+                .checked_sub(reward_lamports)
+                .ok_or(ProgramError::ArithmeticOverflow)?,
+        );
+        user.set_lamports(
+            user_lamports
+                .checked_add(reward_lamports)
+                .ok_or(ProgramError::ArithmeticOverflow)?,
+        );
+
+        // CPI to burn 'token_amounts' Tokens from User's ATA
+        Burn {
+            account: user_ata,
+            mint,
+            authority: user,
+            amount: token_amount,
+        }
+        .invoke()?;
 
         // Update state
         launch_state.supply_tokens = launch_state

@@ -20,7 +20,9 @@ pub struct LaunchAccount {
 
     // Dev Vesting States
     pub dev_vesting_choice: u8,
-    pub padding: [u8; 6],
+    pub state_bump: u8,
+    pub vault_bump: u8,
+    pub padding: [u8; 4],
     pub dev_allocate_tokens: u64,
     pub dev_lock_end_time: i64,
 
